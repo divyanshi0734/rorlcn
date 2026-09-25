@@ -1,10 +1,12 @@
 # Route Optimization via Reinforcement Learning (RORL)
 
 Decentralized Reinforcement Learning vs. Dynamic Dijkstra and Static Shortest Path on Dynamic Network Topologies.
+A decentralized MaskablePPO reinforcement-learning agent trained to route packets on a simulated NSFNET topology, benchmarked against Dynamic Dijkstra and Static SPF. Diagnosed and fixed a two-hop routing-loop failure mode via split-horizon ingress masking, then showed the RL agent consistently outperforms Dijkstra once Dijkstra's global network state is realistically delayed (stale), across a 5-seed, multi-staleness-level sweep.
+---
+## Live Demo
 
 ---
-
-## 🐍 Canonical Python Environment
+## Canonical Python Environment
 
 > **IMPORTANT**: The single canonical Python environment for this project is:
 > ```bash
@@ -16,7 +18,7 @@ Decentralized Reinforcement Learning vs. Dynamic Dijkstra and Static Shortest Pa
 
 ---
 
-## 🚀 Running the Streamlit Dashboard
+## Running the Streamlit Dashboard
 
 To launch the dashboard with the guaranteed canonical environment:
 
@@ -34,7 +36,7 @@ The dashboard runs locally at `http://localhost:8501`.
 
 ---
 
-## 🧪 Running Tests
+## Running Tests
 
 Always execute tests using the canonical environment's `pytest`:
 
@@ -49,8 +51,18 @@ PYTHONPATH=. /opt/anaconda3/bin/pytest tests/test_live_inference_regression.py -
 ```
 
 ---
+## Project structure
 
-## 📁 Repository Structure
+    src/              — network simulator, routing algorithms, RL environment, training pipeline
+    scripts/          — demo and evaluation scripts
+    tests/            — automated test suite (53+ tests)
+    checkpoints/      — trained model weights (mostly gitignored; two canonical
+                        checkpoints below are committed for the live demo)
+    assets/           — benchmark results, plots, telemetry CSVs (tracked in git)
+    app.py            — Streamlit dashboard (3 tabs: benchmark, path tracer, custom network)
+
+---
+## Repository Structure
 
 - `app.py`: Streamlit dashboard with permanent dark mode, 3 tabs (Policy Benchmark, Path Tracer, Custom Network Builder).
 - `run_dashboard.sh`: Canonical launch script binding to `/opt/anaconda3/bin/streamlit`.
@@ -65,3 +77,53 @@ PYTHONPATH=. /opt/anaconda3/bin/pytest tests/test_live_inference_regression.py -
 - `checkpoints/`: Pre-trained MaskablePPO checkpoints (`candidate_a.zip`, `final_model_200k.zip`).
 - `assets/`: Audited benchmark comparison telemetry and evaluation curves.
 - `tests/`: Unit, integration, and regression test suites.
+
+## Canonical model checkpoints
+
+The audited, reported results in this project use:
+
+    checkpoints/reward_tuning/candidate_a.zip   — tuned reward config, w1=2.0, w3=4.0,
+                                                    run with Split-Horizon enabled (default)
+    checkpoints/final_model_200k.zip            — baseline reward config, 200k training steps
+
+Do not confuse either of these with `checkpoints/final_model_50k.zip`
+(an earlier, superseded checkpoint) if present locally.
+
+## Reproducing results
+
+    pytest tests/                                          # run full test suite
+    python -m src.train_agent --seed 42                    # retrain from scratch
+    python scripts/evaluate_agent.py --model checkpoints/reward_tuning/candidate_a.zip
+
+## Key results (Seed 100 benchmark, 2,000 packets, traffic shock at t=20)
+
+| Policy                          | Delivered | Loss Rate | Mean Latency |
+|----------------------------------|-----------|-----------|--------------|
+| Dynamic Dijkstra (oracle)         | 1,984     | 0.80%     | 15.06 ms     |
+| Candidate A + Split-Horizon (RL)  | 1,978     | 1.10%     | 19.56 ms     |
+| Static SPF                        | 1,957     | 2.15%     | 15.75 ms     |
+
+Under realistic stale global-state conditions (τ ≥ 5 timesteps of link-state
+delay, mirroring real OSPF flooding intervals), the RL agent outperforms
+Dijkstra on 5 of 5 evaluation seeds — at the cost of a ~5ms latency penalty
+from taking longer, congestion-avoiding paths.
+
+## Dashboard tabs
+
+1. **Policy Benchmark & Evaluation** — audited comparison tables and plots
+   across Dijkstra, Static SPF, Stale Dijkstra, and the RL agent.
+2. **Interactive Path Tracer** — pick any source/destination on real NSFNET
+   cities, inject link congestion, and watch all three policies route live.
+3. **Custom Network Builder & Analyzer** — generate synthetic topologies
+   (Erdős–Rényi / Barabási–Albert / ring-mesh) and inspect graph metrics.
+   Note: the trained RL policy is NSFNET-specific (fixed 14-node input
+   shape) and does not run unmodified on custom graphs — this tab uses a
+   separate, untrained routing method for comparison.
+
+## Known limitations
+
+- Single centralized policy (not full multi-agent RL — one router per node).
+- Trained and evaluated on NSFNET only; cross-topology generalization is
+  future work (would require a Graph Neural Network state encoding).
+- PPO training hyperparameters were not exhaustively tuned; only the reward
+  function's weighting was tuned across a small, hand-selected sweep.
